@@ -66,7 +66,7 @@ df.indicators <- as.data.frame(row.names = c(first.date:2014),
                                do.call(cbind, lapply(indicators, parsingIndicator)))
 
 #El índice ICSA cuenta las peticiones de desempleo, con lo cual, invertimos el signo
-#para que sea positivo si decrece el desempleo y viceversa
+#para que sea positivo si crece el empleo y viceversa
 df.indicators$ICSA <- df.indicators$ICSA * -1
 
 # Aniadimos a cada fila un '+' o '-' para saber
