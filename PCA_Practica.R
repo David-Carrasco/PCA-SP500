@@ -8,31 +8,30 @@
 #   NAPM --> Índice Sector de fabricación
 #   NMFBAI --> Índice de Actividad de Negocio
 #   GDP --> Producto Interior Bruto
-#   FPI--> Inversión privada en activos fijos
+#   FPI --> Inversión privada en activos fijos
 #   RRSFS --> Ventas minoristas
 #   PERMITNSA --> Pemisos de construcción
 #   GFDEBTN --> Deuda Pública  
 #   WRMFSL --> Flujo dinero en fondos de inversión retail
 
-# El objetivo es reducir el numero de dimensiones para quedarnos con los factores macroeconomicos
-# que mas han influido historicamente en el pasado en el indice SP500
+# El objetivo es reducir el numero de dimensiones para analizar como 
+#los factores macroeconomicos han podido influir históricamente en el pasado en el indice SP500
 
 library(quantmod)
 library(dplyr)
 
-#Descargamos todos los indicadores - en el mismo orden en el quese han explicado previamente
+#Descargamos todos los indicadores
 indicators <- new.env()
 tickers <- c('USSLIND', 'ICSA', 'NAPM', 'NMFBAI', 'GDP', 'FPI',
              'RRSFS', 'PERMITNSA', 'GFDEBTN', 'WRMFSL')
 
 getSymbols(tickers, src='FRED', env = indicators, auto.assign = T)
 
-#El primer registro vendrá dado por la fecha común mas pequeña
+#La primera observación de los datos vendrá dada por la fecha común mas pequeña
 oldest.dates <- sapply(indicators, function(x){ 
                                       x <- rownames(as.data.frame(x))
                                       return(min(x)) })
 first.date <- format(as.Date(max(oldest.dates)), '%Y')
-
 
 # Aquellos que no son acumulativos, quedarán tal cual vienen:
 # NMFBAI
@@ -41,17 +40,18 @@ first.date <- format(as.Date(max(oldest.dates)), '%Y')
 
 # Ahora, pasaremos todos los valores a retornos interanuales a traves de la funcion parsingIndicator.
 
-# Funcion para pasar a formato interanual todos los tickers,
+# Función para pasar a formato interanual todos los tickers,
 # filtrar a partir de la fecha común como punto de partida del dataset
-# y devuelve un vector con el indicador
+# y devolver un vector con el indicador modificado
 # NOTA: Consideramos los datos hasta el 2014 inclusive ya que no todos los indicadores
-#       tienen datos del 2015
+#       tienen datos del 2015 aún
 
 parsingIndicator <- function(indicator){
   
   year.indicator <- to.yearly(indicator)[, 4]
   
-  #Si son indicadores acumulativos, sacamos el YoY change en %
+  #En los indicadores que son acumulativos, sacaremos el YoY change en %
+  #En aquellos que no, se dejarán tal cual son descargos con quantmod
   if (!names(indicator) %in% c('NMFBAI', 'NAPM', 'USSLIND')){
     year.indicator <- round(Delt(year.indicator) * 100, 3)
   }
@@ -87,23 +87,20 @@ pve <- pr.var/sum(pr.var)
 #de la tercera componente
 plot(pve, type = 'b')
 
-#Cogeremos en este caso, 3 componentes que engloban un PVE de 89,4%, 
-#aunque con 2 componentes ya tenemos un PVE de 82%
+#Cogeremos en este caso, 2 componentes que engloban un PVE de 82%, 
+#aunque con 3 componentes tendríamos un PVE de 89.4%
 cumsum(pve) * 100
 
 #Analizamos correlaciones entre componentes y valores propios
 pr.out$rotation
 
-#La única correlación significativa entre los valores propios y las 3 componentes
-#es una alta correlación inversa entre el indicador PERMITNSA y la PC3 (-0.73406267)
-#con lo cual, cuanto menor sea el valor de PC3 del año en concreto, mayor será su indicador PERMITNSA
-#y viceversa en un relación de un 73%
+#No hay correlaciones importantes entre las dimensiones y las 2 primeras componentes principales
 
 #Vemos ahora con un biplot las 2 primeras componentes y sus valores propios
 biplot(pr.out, scale = 0)
 
 #Podemos observar una alta concentración de retornos positivos 
-#para años con PC1 < 0 y -2 < PC2 < 2
+#para años localizados en PC1 < 0 y -2 < PC2 < 2
 #Por tanto, vamos a estudiar los indicadores macroeconomicos de esos años:
 filter_df <- rownames(subset(as.data.frame(pr.out$x), PC1 < 0 & PC2 > -2 & PC2 < 2))
 
@@ -141,10 +138,8 @@ summary(df.positive.returns)
 #en un 1.18%, es decir; está por encima del 0% que es el punto límite entre expansión y peligro de recesión
 #Ref: http://www.investopedia.com/terms/c/cili.asp
 
-#Por tanto, parece que lo que tiene en común son unos datos posivitos macroeconómicos
-#que pudieron favorecer los retornos anuales del índice SP500
-#Habría que seguir confirmando en un futuro que años con retornos positivos en bolsa,
-#la mayoría de ellos, se sitúan en esa concentración de los datos del PCA que hemos estudiado
-
-
+#Por tanto, parece que lo que tienen en común estos años son unos datos posivitos macroeconómicos
+#que pudieron favorecer  esos retornos positivos.
+#Habría que seguir confirmando en un futuro que la mayoría de los años con retornos positivos en bolsa,
+#se sitúan en esa concentración de datos que hemos obtenido a través del PCA
 
