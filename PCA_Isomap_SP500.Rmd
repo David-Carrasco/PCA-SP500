@@ -1,0 +1,287 @@
+---
+title: "PCA_Isomap_SP500"
+author: "David Carrasco"
+output: html_document
+---
+
+#Objetivo
+
+Vamos a llevar a cabo un análisis PCA del retorno del SP500 a partir de diferentes indicadores macroeconómicos.
+(Descargados de la FRED a través de quantmod -> http://research.stlouisfed.org/fred2/)
+
+Estos son:
+
+* __USSLIND__ --> Indicador económico lider de USA
+* __ICSA__ --> Peticiones de desempleo
+* __NAPM__ --> Índice Sector de fabricación
+* __NMFBAI__ --> Índice de Actividad de Negocio
+* __GDP__ --> Producto Interior Bruto
+* __FPI__ --> Inversión privada en activos fijos
+* __RRSFS__ --> Ventas minoristas
+* __PERMITNSA__ --> Pemisos de construcción
+* __GFDEBTN__ --> Deuda Pública  
+* __WRMFSL__ --> Flujo dinero en fondos de inversión retail
+
+El objetivo es reducir el número de dimensiones para analizar como los factores macroeconómicos han podido influir históricamente en el pasado en el indice SP500
+
+# Carga de librerías
+
+```{r message=FALSE, warning=FALSE}
+library(quantmod)
+library(dplyr)
+library(RDRToolbox)
+library(knitr)
+library(rgl)
+```
+
+# Funciones
+
+__parsingIndicator__
+
+Función para pasar a formato interanual todos los tickers,
+filtrar a partir de la fecha común como punto de partida del dataset y devolver un vector con el indicador modificado
+
+__NOTA__ --> Consideramos los datos hasta el 2014 inclusive ya que no todos los indicadores tienen datos del 2015 aún
+
+```{r}
+parsingIndicator <- function(indicator){
+  
+  year.indicator <- to.yearly(indicator)[, 4]
+  
+  #En los indicadores que son acumulativos, sacaremos el YoY change en %
+  #En aquellos que no, se dejarán tal cual son descargos con quantmod
+  if (!names(indicator) %in% c('NMFBAI', 'NAPM', 'USSLIND')){
+    year.indicator <- round(Delt(year.indicator) * 100, 3)
+  }
+  
+  year.indicator <- year.indicator[paste(first.date, '::2014', sep='')]
+  year.indicator <- coredata(year.indicator)[,1]
+  return(year.indicator)
+}
+```
+
+# Main
+
+Descargamos todos los indicadores
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+indicators <- new.env()
+tickers <- c('USSLIND', 'ICSA', 'NAPM', 'NMFBAI', 'GDP', 'FPI',
+             'RRSFS', 'PERMITNSA', 'GFDEBTN', 'WRMFSL')
+
+getSymbols(tickers, src='FRED', env = indicators, auto.assign = T)
+```
+
+La primera observación de los datos vendrá dada por la fecha común mas pequeña
+
+```{r}
+oldest.dates <- sapply(indicators, function(x){ 
+                                      x <- rownames(as.data.frame(x))
+                                      return(min(x)) })
+first.date <- format(as.Date(max(oldest.dates)), '%Y')
+```
+
+Aquellos que no son acumulativos, quedarán tal cual vienen:
+
+* NMFBAI
+* NAPM
+* USSLIND
+
+Ahora, pasaremos todos los valores a retornos interanuales a través de la funcion parsingIndicator.
+
+Dataframe con todos los indicadores agrupados
+
+```{r}
+df.indicators <- as.data.frame(row.names = c(first.date:2014),
+                               do.call(cbind, lapply(indicators, parsingIndicator)))
+```
+
+Añadimos a cada fila un '+' o '-' para saber
+el retorno del índice ese año, desde 1997 hasta 2014
+
+```{r}
+returns.SP500 <- c('+', '+', '+', '-', '-', '-','+',
+                   '+', '+', '+', '+', '-', '+', '+', '+', '+', '+', '+')
+rownames(df.indicators) <- paste(rownames(df.indicators), returns.SP500, sep = '')
+```
+
+# PCA
+
+```{r}
+pr.out = prcomp(df.indicators, scale=TRUE)
+```
+
+Vamos a determinar la proporción de variabilidad explicada para determinar cuantas componentes vamos a coger
+
+```{r}
+pr.var <- pr.out$sdev^2
+```
+
+Calculamos la proporción PVE
+
+```{r}
+pve <- pr.var/sum(pr.var)
+```
+
+Con el test del "codo", vemos que la pendiente decrece sustancialmente a partir de la tercera componente
+
+```{r}
+plot(pve, type = 'b')
+```
+
+Cogeremos en este caso, 2 componentes que engloban un PVE de 82%, aunque con 3 componentes tendríamos un PVE de 89.4%
+
+```{r}
+cumsum(pve) * 100
+```
+
+Analizamos correlaciones entre componentes y valores propios, vemos que no hay correlaciones importantes entre las dimensiones y las 2 primeras componentes principales
+
+```{r}
+pr.out$rotation
+```
+
+Vemos ahora con un biplot las 2 primeras componentes y sus valores propios
+
+```{r fig.width=10, fig.height=6}
+biplot(pr.out, scale = 0)
+```
+
+Podemos observar una alta concentración de retornos positivos para años localizados en PC1 < 0 y -2 < PC2 < 2
+
+Por tanto, vamos a estudiar los indicadores macroeconomicos de esos años
+
+```{r}
+filter_df <- rownames(subset(as.data.frame(pr.out$x), PC1 < 0 & PC2 > -2 & PC2 < 2))
+```
+
+Analizamos cada uno de los indicadores de la selección anterior
+
+```{r}
+df.positive.returns <- df.indicators[filter_df, ]
+summary(df.positive.returns)
+```
+
+# Conclusiones
+
+* El GDP crece en todos esos años, mínimo a un 3,467% anual
+
+* El número de licencias de construcción no es altamente relevante ya que tiene tanto valores positivos como negativos, aunque la mediana indica un sesgo positivo durante esos años --> incremento de un 7.83% anual
+
+* El número de peticiones de desempleo en todos esos años, decrece al menos un 3,15% anual
+
+* El índice de Actividad de Negocio en todos esos años es como mínimo 54.3, es decir; está por encima de 50 que es el punto límite entre expansión o recesión [Fuente](http://www.investopedia.com/university/releases/servicereport.asp)
+
+* El índice Sector de fabricación en todos esos años es como mínimo 50.4, es decir; está por encima de 50 que es el punto límite entre expansión o recesión [Fuente](http://www.investopedia.com/terms/p/pmi.asp)
+
+* La deuda pública durante esos años, ha crecido como mínimo al 2.721% anual
+
+* La inversión privada en activos fijos durante esos años, ha sido como mínimo de un 5.82% anual
+
+* La inversión en fondos de inversión retail varía esos años entre un -10% y 15% anual y su media es de un -2% con lo cual, no aporta información relevante
+
+* Las ventas minoristas durante esos años, han crecido mínimo al 1.38% anual
+
+* El Indicador económico lider de USA durante esos años, se ha situado como mínimo en un 1.18%, es decir; está por encima del 0% que es el punto límite entre expansión y peligro de recesión [Fuente](http://www.investopedia.com/terms/c/cili.asp)
+
+Por tanto, parece que lo que tienen en común estos años son unos datos positivos macroeconómicos en general, que pudieron favorecer esos retornos positivos.
+
+Habría que seguir evaluando en un futuro si la mayoría de los años con retornos positivos en bolsa, se sitúan en esa concentración de datos que hemos obtenido a través del PCA para detectar posibles relaciones causales
+
+# ISOMAP
+
+Realizamos el mismo análisis anterior en vez de con PCA con ISOMAP, para identificar posibles estructuras no lineales al realizar la exploración de los datos
+
+Estimamos la dimensión intrínseca dibujando los residuos mediante el gráfico del codo entre 1 y 5 dimensiones
+
+```{r}
+Isomap_indicators_1to5 = Isomap(data=as.matrix(df.indicators), dims=1:5, k=4, plotResiduals=TRUE)
+```
+
+Isomap con 3 dimensiones
+
+```{r}
+Isomap_indicators_3 = Isomap(data = as.matrix(df.indicators), dim = 3, k = 4)
+```
+
+Isomap con 2 dimensiones
+
+```{r}
+Isomap_indicators_2 = Isomap(data = as.matrix(df.indicators), dim = 2, k = 4)
+```
+
+Preparación labels del plot
+
+Agrupamos los años con retornos positivos en un color y los años en negativos con otro color
+
+```{r}
+labels <- lapply(rownames(df.indicators), function(x){ return(ifelse(grepl("\\+$", x), '+', '-'))})
+labels <- as.factor(do.call(c, labels))
+```
+
+Configuración plotting 3d inline
+
+```{r warning=FALSE}
+knit_hooks$set(webgl = hook_webgl)
+```
+
+Plot con 3 dimensiones intrínsecas
+
+```{r webgl=TRUE, message=FALSE}
+plotDR(Isomap_indicators_3$dim3, labels = labels, text = rownames(df.indicators), axesLabels = c('V1', 'V2', 'V3'))
+```
+
+Plot con 2 dimensiones intrínsecas
+
+```{r message=FALSE, warning=FALSE, error=FALSE}
+plotDR(Isomap_indicators_2$dim2, labels = labels, text = rownames(df.indicators), axesLabels = c('V1', 'V2'))
+```
+
+Vemos que no perdemos información relativa al pasar de 3 a 2 dimensiones con lo cual, nos quedamos con una dimensión intrínseca 2 para seguir analizando
+
+Observamos una alta concentración de retornos positivos para V1>0 y V2<0 como en el análisis PCA previo.
+Vamos a ver si hay diferencias
+
+```{r}
+filter_isomap <- as.data.frame(row.names = rownames(df.indicators), Isomap_indicators_2$dim2)
+filtered_isomap <- rownames(filter_isomap[filter_isomap$V1 > 0 & filter_isomap$V2 < 0,])
+```
+
+Obtenemos el dataframe inicial filtrado por estos años que hemos obtenido
+
+```{r}
+isomap.df <- df.indicators[filtered_isomap, ]
+```
+
+Al estudiar los datos de este dataframe, nos damos cuenta que llegamos a resultados muy similares a los obtenidos en el PCA previo por tanto, las conclusiones son similares al PCA
+
+```{r}
+summary(isomap.df)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -19,6 +19,8 @@
 
 library(quantmod)
 library(dplyr)
+library(RDRToolbox)
+library(rgl)
 
 #Descargamos todos los indicadores
 indicators <- new.env()
@@ -138,8 +140,55 @@ summary(df.positive.returns)
 #en un 1.18%, es decir; está por encima del 0% que es el punto límite entre expansión y peligro de recesión
 #Ref: http://www.investopedia.com/terms/c/cili.asp
 
-#Por tanto, parece que lo que tienen en común estos años son unos datos posivitos macroeconómicos
+#Por tanto, parece que lo que tienen en común estos años son unos datos positivos macroeconómicos
 #que pudieron favorecer  esos retornos positivos.
 #Habría que seguir confirmando en un futuro que la mayoría de los años con retornos positivos en bolsa,
 #se sitúan en esa concentración de datos que hemos obtenido a través del PCA
+
+
+############################ ANALISIS ISOMAP #############################################
+
+#Realizamos el mismo análisis anterior en vez de con PCA, con ISOMAP para identificar
+#posibles estructuras no lineales al realizar la exploración de los datos
+
+# Estimamos la dimensión intrínseca dibujando los residuos mediante el gráfico del codo
+# que estará entre 2 o 3 dimensiones
+Isomap_indicators_1to5 = Isomap(data=as.matrix(df.indicators), dims=1:5, k=4, plotResiduals=TRUE)
+
+#Con 3 dimensiones
+Isomap_indicators_3 = Isomap(data = as.matrix(df.indicators), dim = 3, k = 4)
+
+#Con 2 dimensiones
+Isomap_indicators_2 = Isomap(data = as.matrix(df.indicators), dim = 2, k = 4)
+
+#Preparación labels del plot
+#Agrupamos los años con retornos positivos en un color y los años en negativos con otro color
+labels <- lapply(rownames(df.indicators), function(x){ return(ifelse(grepl("\\+$", x), '+', '-'))})
+labels <- as.factor(do.call(c, labels))
+
+#Plot con 3 dimensiones intrínsecas
+plotDR(Isomap_indicators_3$dim3, labels = labels, 
+       text = rownames(df.indicators), axesLabels = c('V1', 'V2', 'V3'))
+
+
+#Plot con 2 dimensiones intrínsecas
+plotDR(Isomap_indicators_2$dim2, labels = labels, 
+       text = rownames(df.indicators), axesLabels = c('V1', 'V2'))
+
+#Vemos que no perdemos información relativa al pasar de 3 a 2 dimensiones
+#con lo cual, nos quedamos con una dimensión intrínseca 2 para seguir analizando
+
+#Observamos una alta concentración de retornos positivos para V1>0 y V2<0
+#como en el análisis PCA previo. Vamos a ver si hay diferencias
+filter_isomap <- as.data.frame(row.names = rownames(df.indicators),
+                                  Isomap_indicators_2$dim2)
+
+filtered_isomap <- rownames(filter_isomap[filter_isomap$V1 > 0 & filter_isomap$V2 < 0,])
+
+#Obtenemos el dataframe inicial filtrado por estos años que hemos obtenido
+isomap.df <- df.indicators[filtered_isomap, ]
+
+#Al estudiar los datos de este dataframe, nos damos cuenta que llegamos a resultados muy similares
+#a los obtenidos en el PCA previo
+summary(isomap.df)
 
