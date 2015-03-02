@@ -1,12 +1,12 @@
 ---
 title: "PCA_Isomap_SP500"
-author: "David Carrasco"
+author: "David Carrasco - [github](https://github.com/David-Carrasco)"
 output: html_document
 ---
 
 #Objetivo
 
-Vamos a llevar a cabo un análisis PCA del retorno del SP500 a partir de diferentes indicadores macroeconómicos.
+Vamos a llevar a cabo un análisis PCA y a aplicar el algoritmo Isomap con los datos de los retornos anuales del SP500 a partir de diferentes indicadores macroeconómicos.
 (Descargados de la FRED a través de quantmod -> http://research.stlouisfed.org/fred2/)
 
 Estos son:
@@ -22,7 +22,7 @@ Estos son:
 * __GFDEBTN__ --> Deuda Pública  
 * __WRMFSL__ --> Flujo dinero en fondos de inversión retail
 
-El objetivo es reducir el número de dimensiones para analizar como los factores macroeconómicos han podido influir históricamente en el pasado en el indice SP500
+El objetivo es reducir el número de dimensiones para analizar como los factores macroeconómicos han podido influir históricamente en los resultados del índice SP500
 
 # Carga de librerías
 
@@ -105,6 +105,12 @@ returns.SP500 <- c('+', '+', '+', '-', '-', '-','+',
 rownames(df.indicators) <- paste(rownames(df.indicators), returns.SP500, sep = '')
 ```
 
+Muestra del dataframe
+
+```{r}
+head(df.indicators)
+```
+
 # PCA
 
 ```{r}
@@ -115,11 +121,6 @@ Vamos a determinar la proporción de variabilidad explicada para determinar cuan
 
 ```{r}
 pr.var <- pr.out$sdev^2
-```
-
-Calculamos la proporción PVE
-
-```{r}
 pve <- pr.var/sum(pr.var)
 ```
 
@@ -159,6 +160,7 @@ Analizamos cada uno de los indicadores de la selección anterior
 
 ```{r}
 df.positive.returns <- df.indicators[filter_df, ]
+df.positive.returns
 summary(df.positive.returns)
 ```
 
@@ -253,35 +255,9 @@ Obtenemos el dataframe inicial filtrado por estos años que hemos obtenido
 isomap.df <- df.indicators[filtered_isomap, ]
 ```
 
-Al estudiar los datos de este dataframe, nos damos cuenta que llegamos a resultados muy similares a los obtenidos en el PCA previo por tanto, las conclusiones son similares al PCA
+Al estudiar los datos de este dataframe, nos damos cuenta que llegamos a resultados muy similares a los obtenidos en el PCA previo por tanto, las conclusiones son similares a dicho análisis
 
 ```{r}
 summary(isomap.df)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
